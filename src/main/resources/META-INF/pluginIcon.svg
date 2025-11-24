@@ -1,0 +1,14 @@
+<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
+  <title>SmartEnv</title>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1b5cff"/>
+      <stop offset="100%" stop-color="#2dd6c2"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="36" height="36" rx="10" fill="url(#bg)" />
+  <path d="M12 15h16v2H12zM12 21h12v2H12zM12 27h8v2h-8z" fill="#ffffff" />
+  <circle cx="27" cy="26" r="6" fill="#0f172a" opacity="0.85"/>
+  <path d="M27 21.5c-2.49 0-4.5 2.01-4.5 4.5s2.01 4.5 4.5 4.5 4.5-2.01 4.5-4.5-2.01-4.5-4.5-4.5zm0 2c1.38 0 2.5 1.12 2.5 2.5S28.38 28.5 27 28.5 24.5 27.38 24.5 26 25.62 23.5 27 23.5z" fill="#2dd6c2"/>
+  <path d="M20 11.5h8v2h-8z" fill="#dbeafe" opacity="0.9"/>
+</svg>

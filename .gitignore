@@ -1,0 +1,69 @@
+### JetBrains Plugin: IntelliJ Platform Sandbox ###
+sandbox/
+.idea/sandbox/
+
+# Older sandbox location (deprecated IntelliJ SDK layout)
+out/
+plugins-sandbox/
+
+### IntelliJ IDEA Project Files ###
+# User-specific and machine-specific files
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/dictionaries
+.idea/**/shelf/
+
+# VCS, workspace-scope files
+.idea/**/vcs.xml
+.idea/**/modules.xml
+
+# Datasource files
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+
+# Gradle-specific IDEA files
+.idea/**/gradle.xml
+.idea/**/libraries/
+
+# Generated plugin icons cache
+.idea/icon.png
+
+### Gradle ###
+.gradle/
+build/
+**/build/
+
+# Local properties
+gradle-app.setting
+gradle-local.properties
+
+### Kotlin/Java ###
+*.class
+*.log
+
+### IntelliJ Run Configurations ###
+.idea
+
+### OS-specific ###
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+*.lnk
+
+# Linux
+*~
+
+### Logs ###
+*.log
+
+### JetBrains Cache ###
+.idea/**/workspace.xml
+.idea/**/usage.statistics.xml
+.idea/**/shelf/
+
+### JetBrains Plugin Artifacts ###
+*.zip          # built plugin distributions
+*.jar          # compiled jars (unless you intentionally commit them)
+*.hprof        # heap dumps

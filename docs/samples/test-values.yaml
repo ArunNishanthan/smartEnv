@@ -1,0 +1,12 @@
+app:
+  name: SmartEnv
+  mode: test
+  features:
+    logging: true
+    retries: 3
+services:
+  api: https://api.smartenv.dev
+  queue: amqp://localhost:5672
+metadata:
+  version: "1"
+  owner: team-west

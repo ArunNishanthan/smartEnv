@@ -1,0 +1,33 @@
+<idea-plugin>
+    <id>dev.smartenv.smartenv</id>
+    <name>SmartEnv</name>
+    <version>0.1.0-SNAPSHOT</version>
+    <vendor>SmartEnv Team</vendor>
+<description>
+        SmartEnv injects profile-driven environment variables right before launching run configurations,
+        following the layered configuration rules described in the SmartEnv specification.
+    </description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.java</depends>
+
+    <projectService serviceImplementation="dev.smartenv.services.SmartEnvProjectService"/>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="SmartEnv Notifications" displayType="BALLOON" logByDefault="true"/>
+        <runConfigurationExtension implementation="dev.smartenv.execution.SmartEnvRunConfigurationExtension"/>
+        <projectConfigurable
+                id="dev.smartenv.settings"
+                displayName="SmartEnv"
+                parentId="tools"
+                instance="dev.smartenv.ui.SmartEnvSettingsConfigurable"/>
+        <toolWindow id="SmartEnv Logs" factoryClass="dev.smartenv.ui.SmartEnvLogsToolWindowFactory" anchor="bottom" secondary="true" />
+    </extensions>
+
+    <actions>
+        <action id="SmartEnv.QuickSettings" class="dev.smartenv.ui.SmartEnvQuickSettingsAction" text="SmartEnv Quick Settings" description="Open SmartEnv quick controls">
+            <add-to-group group-id="NavBarToolbar" anchor="last"/>
+            <add-to-group group-id="MainToolbarRight" anchor="after" relative-to-action="MoreActionGroup"/>
+        </action>
+    </actions>
+</idea-plugin>

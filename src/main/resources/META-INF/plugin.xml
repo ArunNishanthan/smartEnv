@@ -1,0 +1,56 @@
+<idea-plugin>
+    <id>dev.smartenv.smartenv</id>
+    <name>SmartEnv</name>
+    <version>1.0.0</version>
+    <vendor url="https://example.com/smartenv">SmartEnv Team</vendor>
+    <description><![CDATA[
+        <p>SmartEnv injects profile-driven environment variables right before launching run configurations.</p>
+        <ul>
+          <li>Compose values from .env, .properties, YAML, JSON (flattened or blob), and plain key=value.</li>
+          <li>Profiles per run configuration plus a Quick Settings popup to switch without reopening settings.</li>
+          <li>Preview merged values before they are applied.</li>
+          <li>Unknown file extensions default to JSON blob mode so content is always injectable.</li>
+        </ul>
+        <p><b>Quick start</b></p>
+        <ol>
+          <li>Open <i>Settings | Tools | SmartEnv</i>, enable the plugin, and add a profile.</li>
+          <li>Add files with <i>Format = Auto-detect</i>; use JSON blob mode when you want the whole file under one key.</li>
+          <li>Assign the profile to a run configuration; run or debug and inspect the preview.</li>
+          <li>Use the status bar widget or Quick Settings action to switch profiles on the fly.</li>
+        </ol>
+        <p>Sample files live in <code>docs/samples/</code> (env, properties, yaml, json, and json-blob examples).</p>
+    ]]></description>
+    <change-notes>
+        <![CDATA[
+        <h3>1.0.0 — First release</h3>
+        <ul>
+          <li>Profile-based env injection with preview and Quick Settings.</li>
+          <li>Supports dotenv, properties, YAML, JSON (flatten or blob), and plain key=value.</li>
+          <li>Graceful default to JSON blob mode when file type cannot be inferred.</li>
+        </ul>
+        ]]>
+    </change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.java</depends>
+
+    <projectService serviceImplementation="dev.smartenv.services.SmartEnvProjectService"/>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="SmartEnv Notifications" displayType="BALLOON" logByDefault="true"/>
+        <runConfigurationExtension implementation="dev.smartenv.execution.SmartEnvRunConfigurationExtension"/>
+        <projectConfigurable
+                id="dev.smartenv.settings"
+                displayName="SmartEnv"
+                parentId="tools"
+                instance="dev.smartenv.ui.SmartEnvSettingsConfigurable"/>
+        <toolWindow id="SmartEnv Logs" factoryClass="dev.smartenv.ui.SmartEnvLogsToolWindowFactory" anchor="bottom" secondary="true" />
+    </extensions>
+
+    <actions>
+        <action id="SmartEnv.QuickSettings" class="dev.smartenv.ui.SmartEnvQuickSettingsAction" text="SmartEnv Quick Settings" description="Open SmartEnv quick controls">
+            <add-to-group group-id="NavBarToolbar" anchor="last"/>
+            <add-to-group group-id="MainToolbarRight" anchor="after" relative-to-action="MoreActionGroup"/>
+        </action>
+    </actions>
+</idea-plugin>
