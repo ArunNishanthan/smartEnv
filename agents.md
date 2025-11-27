@@ -32,3 +32,8 @@ This doc is for future automation agents working on the SmartEnv plugin. Keep ed
 
 - IDEA logs: `idea.log` (from sandbox or main IDE)
 - SmartEnv debug logs use IntelliJ Logger; enable debug to trace parsing
+
+## Release 1.1.0 Notes
+
+- Version bumped to `1.1.0` in `build.gradle.kts` and `plugin.xml`, with matching change notes.
+- README updated to describe the new inheritance flow, preview UI, and unified entries table before publishing.
