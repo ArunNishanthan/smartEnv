@@ -1,20 +1,23 @@
 {
-  "hello": {
+  "stack": {
     "app": {
-      "name": "SmartEnv",
-      "mode": "test",
+      "name": "smartenv-mobile",
+      "mode": "delta",
       "features": {
-        "logging": true,
-        "retries": 3
+        "logging": false,
+        "retries": 2,
+        "crashReports": true
       }
     },
     "services": {
-      "api": "https://api.smartenv.dev",
-      "queue": "amqp://localhost:5672"
+      "api": "https://delta.smartenv.dev",
+      "queue": "amqp://delta-bus:5690",
+      "telemetry": "wss://telemetry.smartenv.dev"
     },
     "metadata": {
-      "version": "1",
-      "owner": "team-west"
+      "version": "3",
+      "owner": "mobile-squad",
+      "region": "ap-south"
     }
   }
 }

@@ -73,10 +73,20 @@ private class SmartEnvLogsPanel(project: Project) : JPanel(BorderLayout()), Disp
         detailArea.text = entry?.let {
             buildString {
                 append("Profile: ${it.profileName} (${it.profileId})\n")
-                append("Chain: ${it.chain.joinToString(" ▶ ")}\n")
+                append("Chain: ${it.chain.joinToString(" -> ")}\n")
                 append("Injected ${it.variables.size} variable(s)\n\n")
                 it.variables.forEach { variable ->
-                    append("${variable.key} = ${variable.value} (${variable.filePath})\n")
+                    val winningLayer = variable.winningLayer
+                    val sourceLabel = winningLayer.sourceDetail ?: winningLayer.layerName
+                    append("${variable.key} = ${variable.finalValue} ($sourceLabel)\n")
+                    if (variable.hasOverrides) {
+                        append("  Sources:\n")
+                        variable.stack.forEachIndexed { idx, layerValue ->
+                            val label = layerValue.source.layerName
+                            append("    ${idx + 1}. $label = ${layerValue.value}\n")
+                        }
+                    }
+                    append("\n")
                 }
             }
         } ?: ""

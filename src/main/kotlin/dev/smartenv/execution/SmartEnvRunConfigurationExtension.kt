@@ -11,7 +11,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
 import dev.smartenv.engine.SmartEnvResolutionResult
 import dev.smartenv.engine.SmartEnvResolver
-import dev.smartenv.engine.flattenedEntries
 import dev.smartenv.logging.SmartEnvLogEntry
 import dev.smartenv.logging.SmartEnvLogsService
 import dev.smartenv.services.SmartEnvProfile
@@ -60,20 +59,20 @@ class SmartEnvRunConfigurationExtension : RunConfigurationExtension() {
             env.putAll(resolution.variables)
         }
 
-        val flattenedEntries = resolution.flattenedEntries()
         val logEntry = SmartEnvLogEntry(
             timestamp = LocalDateTime.now(),
             profileId = profile.id,
             profileName = profile.name.ifBlank { profile.id },
             chain = resolution.chain,
-            variables = flattenedEntries
+            variables = resolution.resolvedKeys
         )
         project.getService(SmartEnvLogsService::class.java)?.record(logEntry)
 
         if (profile.showLogsWhenRunning) {
-            LOG.info("SmartEnv (${profile.name.ifBlank { profile.id }}): Injecting ${resolution.variables.size} vars.")
-            resolution.entries.take(50).forEach {
-                LOG.info("  ${it.key}=${it.value} (${it.filePath})")
+            LOG.info("SmartEnv (${profile.name.ifBlank { profile.id }}): Injecting ${resolution.resolvedKeys.size} vars.")
+            resolution.resolvedKeys.take(50).forEach {
+                val source = it.winningLayer.sourceDetail ?: it.winningLayer.layerName
+                LOG.info("  ${it.key}=${it.finalValue} ($source)")
             }
             ToolWindowManager.getInstance(project).getToolWindow("SmartEnv Logs")?.show(null)
         }
@@ -84,7 +83,7 @@ class SmartEnvRunConfigurationExtension : RunConfigurationExtension() {
     private fun showNotification(project: Project, profile: SmartEnvProfile, resolution: SmartEnvResolutionResult) {
         val detailChain = resolution.chain.joinToString(" ▶ ").ifBlank { profile.name.ifBlank { profile.id } }
         val message =
-            "SmartEnv: Loaded ${resolution.flattenedEntries().size} variable(s) (Profile: ${profile.name.ifBlank { profile.id }}, Chain: $detailChain)"
+            "SmartEnv: Loaded ${resolution.resolvedKeys.size} variable(s) (Profile: ${profile.name.ifBlank { profile.id }}, Chain: $detailChain)"
         NotificationGroupManager.getInstance()
             .getNotificationGroup(notificationGroupId)
             ?.createNotification(message, NotificationType.INFORMATION)

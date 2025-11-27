@@ -1,12 +1,15 @@
 app:
-  name: SmartEnv
-  mode: test
+  name: smartenv-gateway
+  mode: gamma
   features:
-    logging: true
-    retries: 3
+    logging: verbose
+    retries: 1
+    tracing: enabled
 services:
-  api: https://api.smartenv.dev
-  queue: amqp://localhost:5672
+  api: https://gamma.smartenv.dev
+  queue: amqp://smartenv-queue:5679
+  cache: redis://cache.smartenv.dev:6380
 metadata:
-  version: "1"
-  owner: team-west
+  version: "2025.11"
+  owner: platform-gamma
+  region: eu-central

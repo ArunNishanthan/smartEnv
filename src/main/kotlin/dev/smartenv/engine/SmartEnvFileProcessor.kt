@@ -199,7 +199,7 @@ class SmartEnvFileProcessor {
 
     private fun deriveMode1Key(entry: SmartEnvFileEntry, path: Path): String {
         val trimmed = entry.mode1Key?.takeIf { it.isNotBlank() }
-            ?: path.fileName?.toString()?.substringBeforeLast('.', path.fileName.toString()).orEmpty()
+            ?: path.fileName?.toString().orEmpty()
         return trimmed.ifBlank { "json" }
     }
 

@@ -2,7 +2,7 @@ package dev.smartenv.logging
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
-import dev.smartenv.engine.SmartEnvVariableEntry
+import dev.smartenv.engine.ResolvedEnvKey
 import java.time.LocalDateTime
 import java.util.ArrayDeque
 import java.util.concurrent.CopyOnWriteArrayList
@@ -43,8 +43,8 @@ data class SmartEnvLogEntry(
     val profileId: String,
     val profileName: String,
     val chain: List<String>,
-    val variables: List<SmartEnvVariableEntry>
+    val variables: List<ResolvedEnvKey>
 ) {
     val summaryTitle: String
-        get() = "${timestamp.toLocalTime()} – ${profileName.ifBlank { profileId }} (${variables.size} vars)"
+        get() = "${timestamp.toLocalTime()} - ${profileName.ifBlank { profileId }} (${variables.size} vars)"
 }
