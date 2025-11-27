@@ -45,12 +45,22 @@ data class SmartEnvProfile(
     var name: String = "",
     var color: String = "#b67df2",
     var icon: String = "SE",
-    var extends: MutableList<String> = mutableListOf(),
+    var parentId: String? = null,
+    var customEntries: MutableList<SmartEnvCustomEntry> = mutableListOf(),
     var files: MutableList<SmartEnvFileEntry> = mutableListOf(),
+    var layout: MutableList<SmartEnvProfileEntryRef> = mutableListOf(),
     var showLogsWhenRunning: Boolean = true
 )
 
+data class SmartEnvCustomEntry(
+    var id: String = "",
+    var key: String = "",
+    var value: String = "",
+    var enabled: Boolean = true
+)
+
 data class SmartEnvFileEntry(
+    var id: String = java.util.UUID.randomUUID().toString(),
     var path: String = "",
     var enabled: Boolean = true,
     var type: SmartEnvFileType = SmartEnvFileType.AUTO,
@@ -58,6 +68,13 @@ data class SmartEnvFileEntry(
     var mode1Key: String? = null,
     var order: Int = 0
 )
+
+data class SmartEnvProfileEntryRef(
+    var type: EntryType = EntryType.FILE,
+    var refId: String = ""
+) {
+    enum class EntryType { FILE, CUSTOM }
+}
 
 enum class SmartEnvFileType {
     AUTO,
@@ -91,14 +108,26 @@ fun SmartEnvProfile.deepCopy(): SmartEnvProfile {
         name = name,
         color = color,
         icon = icon,
-        extends = extends.toMutableList(),
+        parentId = parentId,
+        customEntries = customEntries.map { it.deepCopy() }.toMutableList(),
         files = files.map { it.deepCopy() }.toMutableList(),
+        layout = layout.map { it.copy() }.toMutableList(),
         showLogsWhenRunning = showLogsWhenRunning
+    )
+}
+
+fun SmartEnvCustomEntry.deepCopy(): SmartEnvCustomEntry {
+    return SmartEnvCustomEntry(
+        id = id,
+        key = key,
+        value = value,
+        enabled = enabled
     )
 }
 
 fun SmartEnvFileEntry.deepCopy(): SmartEnvFileEntry {
     return SmartEnvFileEntry(
+        id = id,
         path = path,
         enabled = enabled,
         type = type,

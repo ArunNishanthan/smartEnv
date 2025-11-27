@@ -11,8 +11,14 @@ SmartEnv lets you compose runtime environment variables from multiple files and 
 ## Features
 - Auto-detects file type by extension; unknown extensions default to JSON blob mode so content is still injectable.
 - Two JSON modes: flatten to dot-notation keys, or keep as a single blob under a custom key.
-- Profile inheritance (extend other profiles) to avoid duplication.
-- Status bar widget + Quick Settings to flip profiles without opening Settings.
+- Profile inheritance (extend other profiles) with full chain merging of file layers and custom overrides.
+- Unified entries table (files + custom values) with multi-select, drag ordering (via move buttons), Delete, and a dropdown Add button.
+- Status bar widget + Quick Settings + toolbar toggle to flip profiles and preview without opening Settings.
+
+## What's New in 1.1.0
+- Profile inheritance now merges files and custom overrides with predictable order.
+- Preview panel rebuilt with search, filters, smooth scrolling, and detailed override stacks.
+- File/custom entries table unified with multi-select deletion, move up/down, and a dropdown Add button for files or custom values.
 
 ## Quick Start
 1) Install the plugin from the Marketplace (search for "SmartEnv") or load the built ZIP (see Build & Publish).  

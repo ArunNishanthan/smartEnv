@@ -5,7 +5,7 @@ plugins {
 
 
 group = "dev.smartenv"
-version = "1.0.0"
+version = "1.1.0"
 
 repositories {
     mavenCentral()
@@ -31,12 +31,11 @@ kotlin {
 tasks {
     patchPluginXml {
         changeNotes.set("""
-            <h3>1.0.0 — First release</h3>
+            <h3>1.1.0 - Inheritance & Preview overhaul</h3>
             <ul>
-                <li>Profile-based env injection with preview before launch.</li>
-                <li>Supports dotenv, properties, YAML, JSON (flatten or blob), and plain key=value files.</li>
-                <li>Quick Settings popup to switch profiles without reopening the settings dialog.</li>
-                <li>Unknown file extensions default to JSON blob mode so content is always applied.</li>
+                <li>Profile inheritance now merges files and custom overrides with predictable ordering.</li>
+                <li>Brand new preview panel with search, filters, and full override stack provenance.</li>
+                <li>Unified entries table (files + custom) with multi-select, move, and dropdown add menu.</li>
             </ul>
         """.trimIndent())
         sinceBuild.set("251.23774.435")

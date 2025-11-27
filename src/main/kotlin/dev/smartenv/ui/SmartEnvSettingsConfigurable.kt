@@ -17,7 +17,6 @@ import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.table.TableView
 import com.intellij.util.ui.ColumnInfo
@@ -26,11 +25,13 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.ListTableModel
 import com.intellij.util.ui.UIUtil
 import dev.smartenv.engine.SmartEnvResolver
-import dev.smartenv.engine.flattenedEntryMap
+import dev.smartenv.services.SmartEnvCustomEntry
 import dev.smartenv.services.SmartEnvFileEntry
 import dev.smartenv.services.SmartEnvFileType
 import dev.smartenv.services.SmartEnvJsonMode
 import dev.smartenv.services.SmartEnvProfile
+import dev.smartenv.services.SmartEnvProfileEntryRef
+import dev.smartenv.services.SmartEnvProfileEntryRef.EntryType
 import dev.smartenv.services.SmartEnvProjectService
 import dev.smartenv.services.deepCopy
 import dev.smartenv.services.findProfileById
@@ -44,9 +45,14 @@ import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.GridLayout
 import java.awt.RenderingHints
+import java.awt.event.ActionEvent
+import java.awt.event.InputEvent
+import java.awt.event.KeyEvent
 import java.io.IOException
 import java.nio.file.Files
 import java.util.Locale
+import java.util.UUID
+import javax.swing.AbstractAction
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.DefaultCellEditor
@@ -61,7 +67,11 @@ import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.JToggleButton
+import javax.swing.JPopupMenu
+import javax.swing.JMenuItem
+import javax.swing.KeyStroke
 import javax.swing.ListSelectionModel
+import javax.swing.JTextField
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
@@ -73,13 +83,14 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
 
     private val profilesModel = DefaultListModel<SmartEnvProfile>()
     private val profilesList = JBList(profilesModel)
-    private val filesTableModel = ListTableModel<SmartEnvFileEntry>(
-        FileEnabledColumn(),
-        FilePathColumn(),
-        FileFormatColumn(),
-        FileKeyColumn()
+    private val entriesTableModel = ListTableModel<ProfileRow>(
+        EntryEnabledColumn(),
+        EntryTypeColumn(),
+        EntryPathColumn(),
+        EntryFormatValueColumn(),
+        EntryKeyColumn()
     )
-    private val filesTable = TableView<SmartEnvFileEntry>(filesTableModel)
+    private val entriesTable = TableView<ProfileRow>(entriesTableModel)
 
     private lateinit var enabledCheckBox: JBCheckBox
     private lateinit var profileNameField: JBTextField
@@ -97,10 +108,12 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
     )
     private val colorComboModel = DefaultComboBoxModel<ColorChoice>(colorChoices.toTypedArray())
     private lateinit var colorCombo: JComboBox<ColorChoice>
+    private val parentComboModel = DefaultComboBoxModel<ParentOption>()
+    private lateinit var parentCombo: JComboBox<ParentOption>
     private lateinit var showLogsCheckBox: JBCheckBox
     private lateinit var activeProfileLabel: JLabel
     private lateinit var setActiveButton: JButton
-    private lateinit var previewArea: JBTextArea
+    private lateinit var previewPanel: SmartEnvPreviewPanel
     private lateinit var previewContainer: JPanel
     private lateinit var previewToggle: JToggleButton
 
@@ -108,6 +121,7 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
     private var selectedProfile: SmartEnvProfile? = null
     private var dirty = false
     private var suppressFieldUpdates = false
+    private var suppressTableEvents = false
 
     override fun getId(): String = "dev.smartenv.settings"
 
@@ -189,6 +203,42 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
             }
         }
 
+        parentCombo = JComboBox(parentComboModel).apply {
+            renderer = object : DefaultListCellRenderer() {
+                override fun getListCellRendererComponent(
+                    list: JList<*>?,
+                    value: Any?,
+                    index: Int,
+                    isSelected: Boolean,
+                    cellHasFocus: Boolean
+                ): Component {
+                    val option = value as? ParentOption
+                    val component = super.getListCellRendererComponent(
+                        list,
+                        option?.label ?: "",
+                        index,
+                        isSelected,
+                        cellHasFocus
+                    ) as JLabel
+                    return component
+                }
+            }
+            addActionListener {
+                if (suppressFieldUpdates) return@addActionListener
+                val option = selectedItem as? ParentOption ?: return@addActionListener
+                val profile = selectedProfile ?: return@addActionListener
+                if (option.profileId == profile.parentId) return@addActionListener
+                if (wouldCreateCycle(profile, option.profileId)) {
+                    Messages.showWarningDialog(project, "Selecting ${option.label} would create an inheritance loop.", "SmartEnv")
+                    updateParentComboOptions(profile)
+                    return@addActionListener
+                }
+                profile.parentId = option.profileId
+                markModified()
+                refreshPreview()
+            }
+        }
+
         showLogsCheckBox = JBCheckBox("Auto-open SmartEnv Logs when running").apply {
             addActionListener {
                 if (suppressFieldUpdates) return@addActionListener
@@ -199,17 +249,18 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
             }
         }
 
-        previewArea = JBTextArea().apply {
-            isEditable = false
-            lineWrap = true
-            wrapStyleWord = true
-            background = UIUtil.getPanelBackground()
-            rows = 12
-        }
+        previewPanel = SmartEnvPreviewPanel(project)
+        val centerStack = JPanel()
+        centerStack.layout = BoxLayout(centerStack, BoxLayout.Y_AXIS)
+        centerStack.border = JBUI.Borders.empty(0, 0, 6, 0)
+        centerStack.add(createEntriesPanel())
+        centerStack.add(Box.createVerticalStrut(12))
+        centerStack.add(createPreviewSection())
+
         val centerPanel = JPanel(BorderLayout(0, 10)).apply {
             border = JBUI.Borders.empty(6)
             add(createProfileDetailPanel(), BorderLayout.NORTH)
-            add(createFilesPanel(), BorderLayout.CENTER)
+            add(centerStack, BorderLayout.CENTER)
         }
 
         setActiveButton = JButton("Set Active").apply {
@@ -292,6 +343,11 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
             if (profilesModel.size <= 1) return@iconButton
             profilesModel.removeElement(candidate)
             stateSnapshot.profiles.remove(candidate)
+            stateSnapshot.profiles.forEach { profile ->
+                if (profile.parentId == candidate.id) {
+                    profile.parentId = null
+                }
+            }
             if (stateSnapshot.activeProfileId == candidate.id) {
                 stateSnapshot.activeProfileId = stateSnapshot.profiles.firstOrNull()?.id
             }
@@ -319,6 +375,7 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         val basicsPanel = FormBuilder.createFormBuilder()
             .addLabeledComponent("Profile Name:", profileNameField, 1, false)
             .addLabeledComponent("Accent Color:", colorCombo, 1, false)
+            .addLabeledComponent("Inherits From:", parentCombo, 1, false)
             .addComponent(badgeHint)
             .panel.apply { border = JBUI.Borders.empty(0, 0, 12, 0) }
 
@@ -332,27 +389,37 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         }
     }
 
-    private fun createFilesPanel(): JPanel {
-        filesTableModel.items = mutableListOf<SmartEnvFileEntry>()
-        filesTable.setShowGrid(false)
-        filesTable.setRowHeight(24)
-        filesTable.selectionModel.selectionMode = ListSelectionModel.SINGLE_SELECTION
-        filesTable.tableHeader.reorderingAllowed = false
-        filesTable.columnModel.getColumn(0).maxWidth = 60
-        filesTableModel.addTableModelListener {
+    private fun createEntriesPanel(): JPanel {
+        suppressTableEvents = true
+        entriesTableModel.items = mutableListOf()
+        suppressTableEvents = false
+        entriesTable.setShowGrid(false)
+        entriesTable.setRowHeight(24)
+        entriesTable.selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
+        entriesTable.tableHeader.reorderingAllowed = false
+        entriesTable.columnModel.getColumn(0).maxWidth = 60
+        entriesTable.columnModel.getColumn(1).maxWidth = 90
+        entriesTableModel.addTableModelListener {
+            if (suppressTableEvents) return@addTableModelListener
             markModified()
+            syncRowsToProfile(selectedProfile)
             refreshPreview()
         }
+        registerTableShortcuts(entriesTable) { removeSelectedEntries() }
 
-        val addButton = iconButton(AllIcons.General.Add, "Add file or folder") { addPathEntry() }
-        val removeButton = iconButton(AllIcons.General.Remove, "Remove selected file") { removeSelectedFile() }
-        val moveUpButton = iconButton(AllIcons.Actions.MoveUp, "Move file up") { moveSelectedEntry(-1) }
-        val moveDownButton = iconButton(AllIcons.Actions.MoveDown, "Move file down") { moveSelectedEntry(1) }
+        val addButton = JButton(AllIcons.General.Add).apply {
+            toolTipText = "Add entry"
+            isFocusable = false
+            putClientProperty("JButton.buttonType", "square")
+            addActionListener { showAddEntryMenu(this) }
+        }
+        val removeButton = iconButton(AllIcons.General.Remove, "Remove selected row(s)") { removeSelectedEntries() }
+        val moveUpButton = iconButton(AllIcons.Actions.MoveUp, "Move entry up") { moveSelectedEntry(-1) }
+        val moveDownButton = iconButton(AllIcons.Actions.MoveDown, "Move entry down") { moveSelectedEntry(1) }
         val exportButton = iconButton(AllIcons.ToolbarDecorator.Export, "Export resolved preview to JSON") {
             exportResolvedPreview()
         }
-
-        previewToggle = JToggleButton("Show resolved preview", AllIcons.Actions.Preview).apply {
+        previewToggle = JToggleButton(AllIcons.Actions.Preview).apply {
             toolTipText = "Toggle resolved preview panel"
             isFocusable = false
             putClientProperty("JButton.buttonType", "square")
@@ -364,7 +431,7 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
             border = JBUI.Borders.emptyBottom(4)
             alignmentX = Component.LEFT_ALIGNMENT
             add(addButton)
-            add(Box.createHorizontalStrut(4))
+            add(Box.createHorizontalStrut(12))
             add(removeButton)
             add(Box.createHorizontalStrut(12))
             add(moveUpButton)
@@ -372,45 +439,43 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
             add(moveDownButton)
             add(Box.createHorizontalStrut(12))
             add(exportButton)
+            add(Box.createHorizontalStrut(8))
+            add(previewToggle)
             add(Box.createHorizontalGlue())
         }
 
         val topStack = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             border = JBUI.Borders.emptyBottom(8)
-            val filesLabel = JLabel("Files in profile").apply {
+            val entriesLabel = JLabel("Files and custom variables").apply {
                 alignmentX = Component.LEFT_ALIGNMENT
             }
-            add(filesLabel)
+            add(entriesLabel)
             add(Box.createVerticalStrut(4))
             add(toolbar)
         }
 
-        val orderingHint = JLabel("Later files override earlier ones (last wins)").apply {
+        val orderingHint = JLabel("Later entries override earlier ones (last wins)").apply {
             foreground = UIUtil.getLabelDisabledForeground()
             border = JBUI.Borders.empty(4, 0, 0, 0)
-        }
-
-        previewContainer = JPanel(BorderLayout()).apply {
-            border = JBUI.Borders.emptyTop(8)
-            add(JBScrollPane(previewArea), BorderLayout.CENTER)
-            isVisible = false
-        }
-
-        val previewControls = JPanel(BorderLayout()).apply {
-            border = JBUI.Borders.emptyTop(8)
-            add(previewToggle, BorderLayout.NORTH)
-            add(previewContainer, BorderLayout.CENTER)
         }
 
         return JPanel(BorderLayout()).apply {
             add(topStack, BorderLayout.NORTH)
             add(JPanel(BorderLayout()).apply {
-                add(JBScrollPane(filesTable), BorderLayout.CENTER)
+                add(JBScrollPane(entriesTable), BorderLayout.CENTER)
                 add(orderingHint, BorderLayout.SOUTH)
             }, BorderLayout.CENTER)
-            add(previewControls, BorderLayout.SOUTH)
         }
+    }
+
+    private fun createPreviewSection(): JPanel {
+        previewContainer = JPanel(BorderLayout()).apply {
+            border = JBUI.Borders.emptyTop(8)
+            add(previewPanel.component, BorderLayout.CENTER)
+            isVisible = false
+        }
+        return previewContainer
     }
 
     private fun addPathEntry() {
@@ -446,14 +511,22 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         val relativePath = FileUtil.getRelativePath(project.basePath ?: file.path, file.path, '/') ?: file.path
         val inferredFormat = inferFormat(file.path)
         val entry = SmartEnvFileEntry(
+            id = UUID.randomUUID().toString(),
             path = relativePath,
             enabled = true,
             type = inferredFormat.type,
             jsonMode = inferredFormat.jsonMode ?: SmartEnvJsonMode.FLAT,
             order = profile.files.size
         )
-        profile.files.add(entry)
-        filesTableModel.items = profile.files
+        val rows = entriesTableModel.items.toMutableList().apply {
+            add(ProfileRow.FileRow(entry))
+        }
+        suppressTableEvents = true
+        entriesTableModel.items = rows
+        suppressTableEvents = false
+        val selection = rows.lastIndex
+        entriesTable.selectionModel.setSelectionInterval(selection, selection)
+        syncRowsToProfile(profile)
         markModified()
         refreshPreview()
     }
@@ -471,14 +544,63 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         }
     }
 
-    private fun removeSelectedFile() {
+    private fun addCustomEntryRow() {
         val profile = selectedProfile ?: return
-        val entry = filesTable.selectedObject ?: return
-        profile.files.remove(entry)
-        profile.files.forEachIndexed { idx, item -> item.order = idx }
-        filesTableModel.items = profile.files
+        val entry = SmartEnvCustomEntry(
+            id = UUID.randomUUID().toString(),
+            key = "",
+            value = "",
+            enabled = true
+        )
+        val rows = entriesTableModel.items.toMutableList().apply {
+            add(ProfileRow.CustomRow(entry))
+        }
+        suppressTableEvents = true
+        entriesTableModel.items = rows
+        suppressTableEvents = false
+        val newIndex = rows.lastIndex
+        entriesTable.selectionModel.setSelectionInterval(newIndex, newIndex)
+        entriesTable.editCellAt(newIndex, 2)
+        syncRowsToProfile(profile)
+        markModified()
+    }
+
+    private fun removeSelectedEntries() {
+        val profile = selectedProfile ?: return
+        val selectedRows = entriesTable.selectedRows
+        if (selectedRows.isEmpty()) return
+        val rows = entriesTableModel.items.toMutableList()
+        selectedRows.map { entriesTable.convertRowIndexToModel(it) }
+            .distinct()
+            .sortedDescending()
+            .forEach { index ->
+                if (index in rows.indices) {
+                    rows.removeAt(index)
+                }
+            }
+        suppressTableEvents = true
+        entriesTableModel.items = rows
+        suppressTableEvents = false
+        syncRowsToProfile(profile)
         markModified()
         refreshPreview()
+    }
+
+    private fun registerTableShortcuts(table: TableView<*>, deleteAction: () -> Unit) {
+        val deleteKey = KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0)
+        val selectAllKey = KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.CTRL_DOWN_MASK)
+        val inputMap = table.getInputMap(JComponent.WHEN_FOCUSED)
+        val actionMap = table.actionMap
+        inputMap.put(deleteKey, "smartenv.delete")
+        actionMap.put("smartenv.delete", object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent?) = deleteAction()
+        })
+        inputMap.put(selectAllKey, "smartenv.selectAll")
+        actionMap.put("smartenv.selectAll", object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent?) {
+                table.selectAll()
+            }
+        })
     }
 
     private fun updatePreviewVisibility(force: Boolean? = null) {
@@ -518,6 +640,122 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         }
     }
 
+    private fun showAddEntryMenu(invoker: Component) {
+        val menu = JPopupMenu()
+        menu.add(JMenuItem("Add file or folder").apply {
+            addActionListener { addPathEntry() }
+        })
+        menu.add(JMenuItem("Add custom variable").apply {
+            addActionListener { addCustomEntryRow() }
+        })
+        menu.show(invoker, 0, invoker.height)
+    }
+
+    private fun ensureEntryLayout(profile: SmartEnvProfile) {
+        profile.files.forEach { it.ensureId() }
+        profile.customEntries.forEach { it.ensureId() }
+        val fileMap = profile.files.associateBy { it.id }
+        val customMap = profile.customEntries.associateBy { it.id }
+        val normalized = mutableListOf<SmartEnvProfileEntryRef>()
+        val seenFiles = mutableSetOf<String>()
+        val seenCustom = mutableSetOf<String>()
+        profile.layout.forEach { entry ->
+            when (entry.type) {
+                EntryType.FILE -> if (fileMap.containsKey(entry.refId)) {
+                    normalized.add(entry)
+                    seenFiles.add(entry.refId)
+                }
+                EntryType.CUSTOM -> if (customMap.containsKey(entry.refId)) {
+                    normalized.add(entry)
+                    seenCustom.add(entry.refId)
+                }
+            }
+        }
+        profile.files.sortedBy { it.order }.forEach { file ->
+            if (file.id !in seenFiles) {
+                normalized.add(SmartEnvProfileEntryRef(EntryType.FILE, file.id))
+            }
+        }
+        profile.customEntries.forEach { custom ->
+            if (custom.id !in seenCustom) {
+                normalized.add(SmartEnvProfileEntryRef(EntryType.CUSTOM, custom.id))
+            }
+        }
+        profile.layout = normalized
+    }
+
+    private fun buildRows(profile: SmartEnvProfile): MutableList<ProfileRow> {
+        ensureEntryLayout(profile)
+        val fileMap = profile.files.associateBy { it.id }
+        val customMap = profile.customEntries.associateBy { it.id }
+        val rows = mutableListOf<ProfileRow>()
+        profile.layout.forEach { entry ->
+            when (entry.type) {
+                EntryType.FILE -> fileMap[entry.refId]?.let { rows.add(ProfileRow.FileRow(it)) }
+                EntryType.CUSTOM -> customMap[entry.refId]?.let { rows.add(ProfileRow.CustomRow(it)) }
+            }
+        }
+        return rows
+    }
+
+    private fun syncRowsToProfile(profile: SmartEnvProfile?) {
+        profile ?: return
+        val files = mutableListOf<SmartEnvFileEntry>()
+        val custom = mutableListOf<SmartEnvCustomEntry>()
+        val layout = mutableListOf<SmartEnvProfileEntryRef>()
+        var order = 0
+        entriesTableModel.items.forEach { row ->
+            when (row) {
+                is ProfileRow.FileRow -> {
+                    row.entry.ensureId()
+                    row.entry.order = order++
+                    files.add(row.entry)
+                    layout.add(SmartEnvProfileEntryRef(EntryType.FILE, row.entry.id))
+                }
+                is ProfileRow.CustomRow -> {
+                    custom.add(row.entry)
+                    layout.add(SmartEnvProfileEntryRef(EntryType.CUSTOM, row.entry.id))
+                }
+            }
+        }
+        profile.files = files
+        profile.customEntries = custom
+        profile.layout = layout
+    }
+
+    private fun updateParentComboOptions(profile: SmartEnvProfile?) {
+        if (!this::parentCombo.isInitialized) return
+        val options = mutableListOf(ParentOption(null, "No parent"))
+        stateSnapshot.profiles
+            .filter { candidate ->
+                candidate.id != profile?.id && !wouldCreateCycle(profile, candidate.id)
+            }
+            .mapTo(options) { candidate ->
+                ParentOption(candidate.id, candidate.name.ifBlank { candidate.id })
+            }
+        parentComboModel.removeAllElements()
+        options.forEach { parentComboModel.addElement(it) }
+        val selected = options.firstOrNull { it.profileId == profile?.parentId } ?: options.first()
+        parentCombo.selectedItem = selected
+    }
+
+    private fun wouldCreateCycle(profile: SmartEnvProfile?, candidateParentId: String?): Boolean {
+        if (profile == null || candidateParentId.isNullOrBlank()) return false
+        var currentId: String? = candidateParentId
+        val seen = mutableSetOf<String>()
+        while (!currentId.isNullOrBlank()) {
+            if (!seen.add(currentId)) {
+                return true
+            }
+            if (currentId == profile.id) {
+                return true
+            }
+            val next = stateSnapshot.findProfileById(currentId) ?: break
+            currentId = next.parentId
+        }
+        return false
+    }
+
     private fun selectProfile(profile: SmartEnvProfile?) {
         selectedProfile = profile
         suppressFieldUpdates = true
@@ -527,9 +765,15 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         if (this::previewToggle.isInitialized) {
             previewToggle.isEnabled = profile != null
         }
+        if (this::parentCombo.isInitialized) {
+            parentCombo.isEnabled = profile != null
+            updateParentComboOptions(profile)
+        }
         selectColorChoice(profile?.color.orEmpty())
         suppressFieldUpdates = false
-        filesTableModel.items = profile?.files ?: mutableListOf<SmartEnvFileEntry>()
+        suppressTableEvents = true
+        entriesTableModel.items = profile?.let { buildRows(it) } ?: mutableListOf()
+        suppressTableEvents = false
         refreshPreview()
         if (this::setActiveButton.isInitialized) {
             setActiveButton.isEnabled = profile != null && profile.id != stateSnapshot.activeProfileId
@@ -543,14 +787,18 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
 
     private fun moveSelectedEntry(delta: Int) {
         val profile = selectedProfile ?: return
-        val index = filesTable.selectedRow
-        if (index < 0) return
-        val newIndex = index + delta
-        if (newIndex < 0 || newIndex >= profile.files.size) return
-        profile.files.swap(index, newIndex)
-        profile.files.forEachIndexed { idx, entry -> entry.order = idx }
-        filesTableModel.items = profile.files
-        filesTable.selectionModel.setSelectionInterval(newIndex, newIndex)
+        val viewIndex = entriesTable.selectedRow
+        if (viewIndex < 0) return
+        val modelIndex = entriesTable.convertRowIndexToModel(viewIndex)
+        val rows = entriesTableModel.items.toMutableList()
+        val targetIndex = modelIndex + delta
+        if (targetIndex < 0 || targetIndex >= rows.size) return
+        rows.swap(modelIndex, targetIndex)
+        suppressTableEvents = true
+        entriesTableModel.items = rows
+        suppressTableEvents = false
+        entriesTable.selectionModel.setSelectionInterval(targetIndex, targetIndex)
+        syncRowsToProfile(profile)
         markModified()
         refreshPreview()
     }
@@ -564,21 +812,11 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
     private fun refreshPreview() {
         val profile = selectedProfile ?: stateSnapshot.profiles.firstOrNull()
         if (profile == null) {
-            previewArea.text = "No profile defined."
+            previewPanel.setResolution(null)
             return
         }
         val result = resolver.resolve(project, stateSnapshot, profile)
-        val ordered = result.flattenedEntryMap()
-        previewArea.text = buildString {
-            append("Chain: ${result.chain.joinToString(" ? ")}\n\n")
-            if (ordered.isEmpty()) {
-                append("<empty profile>\n")
-            } else {
-                ordered.values.forEach { entry ->
-                    append("${entry.key} = ${entry.value}\n")
-                }
-            }
-        }
+        previewPanel.setResolution(result)
     }
 
     private fun exportResolvedPreview() {
@@ -629,7 +867,10 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         }
         enabledCheckBox.isSelected = stateSnapshot.enabled
         profilesModel.clear()
-        stateSnapshot.profiles.forEach { profilesModel.addElement(it) }
+        stateSnapshot.profiles.forEach {
+            ensureEntryLayout(it)
+            profilesModel.addElement(it)
+        }
         val activeProfile = stateSnapshot.findProfileById(stateSnapshot.activeProfileId)
         profilesList.setSelectedValue(activeProfile ?: profilesModel.firstElementOrNull(), true)
         selectProfile(profilesList.selectedValue)
@@ -693,53 +934,130 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         override fun toString(): String = label
     }
 
+    private data class ParentOption(val profileId: String?, val label: String) {
+        override fun toString(): String = label
+    }
+
     private fun String?.parseColor(): Color? {
         val hex = this?.trim()?.removePrefix("#").orEmpty()
         if (hex.isEmpty()) return null
         return runCatching { ColorUtil.fromHex(hex) }.getOrNull()
     }
 
-    private class FileEnabledColumn : ColumnInfo<SmartEnvFileEntry, Boolean>("") {
+    private fun SmartEnvFileEntry.ensureId() {
+        if (id.isBlank()) {
+            id = UUID.randomUUID().toString()
+        }
+    }
+
+    private fun SmartEnvCustomEntry.ensureId() {
+        if (id.isBlank()) {
+            id = UUID.randomUUID().toString()
+        }
+    }
+
+    private class EntryEnabledColumn : ColumnInfo<ProfileRow, Boolean>("") {
         override fun getColumnClass(): Class<*> = java.lang.Boolean::class.java
-        override fun valueOf(item: SmartEnvFileEntry): Boolean = item.enabled
-        override fun isCellEditable(item: SmartEnvFileEntry?) = true
-        override fun setValue(item: SmartEnvFileEntry?, value: Boolean) {
+        override fun valueOf(item: ProfileRow): Boolean = item.enabled
+        override fun isCellEditable(item: ProfileRow?) = true
+        override fun setValue(item: ProfileRow?, value: Boolean) {
             item?.enabled = value
         }
     }
 
-    private class FilePathColumn : ColumnInfo<SmartEnvFileEntry, String>("File") {
-        override fun valueOf(item: SmartEnvFileEntry): String = item.path
-        override fun isCellEditable(item: SmartEnvFileEntry?) = true
-        override fun setValue(item: SmartEnvFileEntry?, value: String) {
-            item?.path = value.trim()
+    private class EntryTypeColumn : ColumnInfo<ProfileRow, String>("Type") {
+        override fun valueOf(item: ProfileRow): String = when (item) {
+            is ProfileRow.FileRow -> "File"
+            is ProfileRow.CustomRow -> "Custom"
         }
     }
 
-    private class FileFormatColumn : ColumnInfo<SmartEnvFileEntry, String>("Format") {
-        override fun valueOf(item: SmartEnvFileEntry): String = FileFormatOption.fromEntry(item).label
-        override fun isCellEditable(item: SmartEnvFileEntry?) = true
-        override fun setValue(item: SmartEnvFileEntry?, value: String) {
-            item ?: return
-            val option = FileFormatOption.fromLabel(value)
-            item.type = option.type
-            option.jsonMode?.let { item.jsonMode = it }
+    private class EntryPathColumn : ColumnInfo<ProfileRow, String>("Path / Key") {
+        override fun valueOf(item: ProfileRow): String = when (item) {
+            is ProfileRow.FileRow -> item.entry.path
+            is ProfileRow.CustomRow -> item.entry.key
         }
 
-        override fun getEditor(item: SmartEnvFileEntry?): DefaultCellEditor {
-            val combo = JComboBox(FileFormatOption.labels)
-            return DefaultCellEditor(combo)
+        override fun isCellEditable(item: ProfileRow?) = item != null
+
+        override fun setValue(item: ProfileRow?, value: String) {
+            val trimmed = value.trim()
+            when (item) {
+                is ProfileRow.FileRow -> item.entry.path = trimmed
+                is ProfileRow.CustomRow -> item.entry.key = trimmed
+                else -> {}
+            }
         }
     }
 
-    private class FileKeyColumn : ColumnInfo<SmartEnvFileEntry, String>("Key") {
-        override fun valueOf(item: SmartEnvFileEntry): String = item.mode1Key.orEmpty()
-        override fun isCellEditable(item: SmartEnvFileEntry?): Boolean {
-            return item?.type == SmartEnvFileType.JSON && item.jsonMode == SmartEnvJsonMode.BLOB
+    private class EntryFormatValueColumn : ColumnInfo<ProfileRow, String>("Format / Value") {
+        private val formatEditor = DefaultCellEditor(JComboBox(FileFormatOption.labels))
+        private val valueEditor = DefaultCellEditor(JTextField())
+
+        override fun valueOf(item: ProfileRow): String = when (item) {
+            is ProfileRow.FileRow -> FileFormatOption.fromEntry(item.entry).label
+            is ProfileRow.CustomRow -> item.entry.value
         }
 
-        override fun setValue(item: SmartEnvFileEntry?, value: String) {
-            item?.mode1Key = value.trim().ifBlank { null }
+        override fun isCellEditable(item: ProfileRow?) = item != null
+
+        override fun setValue(item: ProfileRow?, value: String) {
+            when (item) {
+                is ProfileRow.FileRow -> {
+                    val option = FileFormatOption.fromLabel(value)
+                    item.entry.type = option.type
+                    option.jsonMode?.let { item.entry.jsonMode = it }
+                }
+                is ProfileRow.CustomRow -> item.entry.value = value
+                else -> {}
+            }
+        }
+
+        override fun getEditor(item: ProfileRow?): DefaultCellEditor {
+            return when (item) {
+                is ProfileRow.FileRow -> formatEditor
+                is ProfileRow.CustomRow -> valueEditor
+                else -> formatEditor
+            }
+        }
+    }
+
+    private class EntryKeyColumn : ColumnInfo<ProfileRow, String>("Blob Key") {
+        override fun valueOf(item: ProfileRow): String = when (item) {
+            is ProfileRow.FileRow -> item.entry.mode1Key.orEmpty()
+            is ProfileRow.CustomRow -> ""
+        }
+
+        override fun isCellEditable(item: ProfileRow?): Boolean {
+            return item is ProfileRow.FileRow &&
+                item.entry.type == SmartEnvFileType.JSON &&
+                item.entry.jsonMode == SmartEnvJsonMode.BLOB
+        }
+
+        override fun setValue(item: ProfileRow?, value: String) {
+            if (item is ProfileRow.FileRow) {
+                item.entry.mode1Key = value.trim().ifBlank { null }
+            }
+        }
+    }
+
+    private sealed class ProfileRow {
+        abstract var enabled: Boolean
+
+        class FileRow(val entry: SmartEnvFileEntry) : ProfileRow() {
+            override var enabled: Boolean
+                get() = entry.enabled
+                set(value) {
+                    entry.enabled = value
+                }
+        }
+
+        class CustomRow(val entry: SmartEnvCustomEntry) : ProfileRow() {
+            override var enabled: Boolean
+                get() = entry.enabled
+                set(value) {
+                    entry.enabled = value
+                }
         }
     }
 
