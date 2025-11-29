@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>dev.smartenv.smartenv</id>
     <name>SmartEnv</name>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
     <vendor url="https://example.com/smartenv">SmartEnv Team</vendor>
     <description><![CDATA[
         <p>SmartEnv injects profile-driven environment variables right before launching run configurations.</p>
@@ -22,11 +22,9 @@
     ]]></description>
     <change-notes>
         <![CDATA[
-        <h3>1.1.0 - Inheritance & Preview overhaul</h3>
+        <h3>1.1.1 - Compatibility refresh</h3>
         <ul>
-          <li>Profile inheritance now merges files and custom overrides with predictable ordering.</li>
-          <li>Brand new preview panel with search, filters, and full override stack provenance.</li>
-          <li>Unified entries table (files + custom) with multi-select, move, and dropdown add menu.</li>
+          <li>Extend IntelliJ build compatibility through 252.28238.7 while keeping the existing feature set intact.</li>
         </ul>
         ]]>
     </change-notes>

@@ -37,3 +37,8 @@ This doc is for future automation agents working on the SmartEnv plugin. Keep ed
 
 - Version bumped to `1.1.0` in `build.gradle.kts` and `plugin.xml`, with matching change notes.
 - README updated to describe the new inheritance flow, preview UI, and unified entries table before publishing.
+
+## Release 1.1.1 Notes
+
+- Version bumped to `1.1.1` in `build.gradle.kts` and `plugin.xml`.
+- Change notes now highlight the compatibility extension through build `252.28238.7`.

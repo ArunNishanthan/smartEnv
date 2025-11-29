@@ -5,7 +5,7 @@ plugins {
 
 
 group = "dev.smartenv"
-version = "1.1.0"
+version = "1.1.1"
 
 repositories {
     mavenCentral()
@@ -31,15 +31,13 @@ kotlin {
 tasks {
     patchPluginXml {
         changeNotes.set("""
-            <h3>1.1.0 - Inheritance & Preview overhaul</h3>
+            <h3>1.1.1 - Compatibility refresh</h3>
             <ul>
-                <li>Profile inheritance now merges files and custom overrides with predictable ordering.</li>
-                <li>Brand new preview panel with search, filters, and full override stack provenance.</li>
-                <li>Unified entries table (files + custom) with multi-select, move, and dropdown add menu.</li>
+                <li>Extend IntelliJ build compatibility through 252.28238.7 while keeping the existing feature set intact.</li>
             </ul>
         """.trimIndent())
         sinceBuild.set("251.23774.435")
-        untilBuild.set("252.27397.103")
+        untilBuild.set("252.28238.7")
     }
 
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

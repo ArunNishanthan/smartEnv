@@ -6,8 +6,11 @@ import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunnerSettings
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Condition
 import com.intellij.openapi.wm.ToolWindowManager
 import dev.smartenv.engine.SmartEnvResolutionResult
 import dev.smartenv.engine.SmartEnvResolver
@@ -74,19 +77,37 @@ class SmartEnvRunConfigurationExtension : RunConfigurationExtension() {
                 val source = it.winningLayer.sourceDetail ?: it.winningLayer.layerName
                 LOG.info("  ${it.key}=${it.finalValue} ($source)")
             }
-            ToolWindowManager.getInstance(project).getToolWindow("SmartEnv Logs")?.show(null)
+            invokeOnEdt(project) {
+                ToolWindowManager.getInstance(project).getToolWindow("SmartEnv Logs")?.show(null)
+            }
         }
 
         showNotification(project, profile, resolution)
     }
 
     private fun showNotification(project: Project, profile: SmartEnvProfile, resolution: SmartEnvResolutionResult) {
-        val detailChain = resolution.chain.joinToString(" ▶ ").ifBlank { profile.name.ifBlank { profile.id } }
-        val message =
-            "SmartEnv: Loaded ${resolution.resolvedKeys.size} variable(s) (Profile: ${profile.name.ifBlank { profile.id }}, Chain: $detailChain)"
-        NotificationGroupManager.getInstance()
-            .getNotificationGroup(notificationGroupId)
-            ?.createNotification(message, NotificationType.INFORMATION)
-            ?.notify(project)
+        invokeOnEdt(project) {
+            val detailChain = resolution.chain.joinToString(" ? ").ifBlank { profile.name.ifBlank { profile.id } }
+            val message =
+                "SmartEnv: Loaded ${resolution.resolvedKeys.size} variable(s) (Profile: ${profile.name.ifBlank { profile.id }}, Chain: $detailChain)"
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup(notificationGroupId)
+                ?.createNotification(message, NotificationType.INFORMATION)
+                ?.notify(project)
+        }
+    }
+
+    private fun invokeOnEdt(project: Project, action: () -> Unit) {
+        val app = ApplicationManager.getApplication()
+        if (app.isDispatchThread) {
+            action()
+        } else {
+            app.invokeLater({
+                if (!project.isDisposed) {
+                    action()
+                }
+            }, ModalityState.NON_MODAL, Condition<Any?> { project.isDisposed })
+        }
     }
 }
+
