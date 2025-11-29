@@ -2,7 +2,9 @@ package dev.smartenv.ui
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Condition
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
@@ -12,6 +14,7 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import kotlin.jvm.Volatile
 import dev.smartenv.logging.SmartEnvLogEntry
 import dev.smartenv.logging.SmartEnvLogsService
 import javax.swing.DefaultListModel
@@ -35,8 +38,19 @@ private class SmartEnvLogsPanel(project: Project) : JPanel(BorderLayout()), Disp
     private val entriesModel = DefaultListModel<SmartEnvLogEntry>()
     private val entryList = JBList(entriesModel)
     private val detailArea = JBTextArea()
+    @Volatile
+    private var disposed = false
     private val listener = {
-        ApplicationManager.getApplication().invokeLater { refreshEntries() }
+        val app = ApplicationManager.getApplication()
+        app.invokeLater(
+            {
+                if (!disposed) {
+                    refreshEntries()
+                }
+            },
+            ModalityState.any(),
+            Condition<Any?> { disposed }
+        )
     }
 
     init {
@@ -93,6 +107,7 @@ private class SmartEnvLogsPanel(project: Project) : JPanel(BorderLayout()), Disp
     }
 
     override fun dispose() {
+        disposed = true
         service.removeListener(listener)
     }
 }

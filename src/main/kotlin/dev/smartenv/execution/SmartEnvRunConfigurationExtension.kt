@@ -10,8 +10,8 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Condition
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.openapi.util.Condition
 import dev.smartenv.engine.SmartEnvResolutionResult
 import dev.smartenv.engine.SmartEnvResolver
 import dev.smartenv.logging.SmartEnvLogEntry
@@ -78,7 +78,7 @@ class SmartEnvRunConfigurationExtension : RunConfigurationExtension() {
                 LOG.info("  ${it.key}=${it.finalValue} ($source)")
             }
             invokeOnEdt(project) {
-                ToolWindowManager.getInstance(project).getToolWindow("SmartEnv Logs")?.show(null)
+                ToolWindowManager.getInstance(project).getToolWindow("SmartEnv Logs")?.show()
             }
         }
 
@@ -106,7 +106,7 @@ class SmartEnvRunConfigurationExtension : RunConfigurationExtension() {
                 if (!project.isDisposed) {
                     action()
                 }
-            }, ModalityState.NON_MODAL, Condition<Any?> { project.isDisposed })
+            }, ModalityState.nonModal(), Condition<Any?> { project.isDisposed })
         }
     }
 }
