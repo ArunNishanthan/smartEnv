@@ -42,3 +42,10 @@ This doc is for future automation agents working on the SmartEnv plugin. Keep ed
 
 - Version bumped to `1.1.1` in `build.gradle.kts` and `plugin.xml`.
 - Change notes now highlight the compatibility extension through build `252.28238.7`.
+
+## Release 1.1.2 Notes
+
+- Version bumped to `1.1.2` in `build.gradle.kts` and `plugin.xml`, with change notes covering the parsing/UI upgrades.
+- Dotenv/properties parsing now handles `export`, inline comments, and quoted values; missing files emit clearer notes that surface in the UI.
+- Settings adds a Status column fed by resolver diagnostics, folder imports skip `.git/.idea/build/out`, and large imports prompt at 100 files.
+- Preview table emphasizes override-heavy keys, color badges gained contrast borders, and Quick Settings now offers an “Open SmartEnv Preview.” action.

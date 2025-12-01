@@ -24,6 +24,7 @@ import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.ListTableModel
 import com.intellij.util.ui.UIUtil
+import dev.smartenv.engine.SmartEnvFileParseResult
 import dev.smartenv.engine.SmartEnvResolver
 import dev.smartenv.services.SmartEnvCustomEntry
 import dev.smartenv.services.SmartEnvFileEntry
@@ -49,9 +50,14 @@ import java.awt.event.ActionEvent
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import java.io.IOException
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.Locale
 import java.util.UUID
+import kotlin.jvm.Volatile
 import javax.swing.AbstractAction
 import javax.swing.Box
 import javax.swing.BoxLayout
@@ -76,6 +82,18 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
 class SmartEnvSettingsConfigurable(private val project: Project) : SearchableConfigurable {
+    companion object {
+        private const val FOLDER_CONFIRMATION_THRESHOLD = 100
+        private val SKIPPED_FOLDER_NAMES = setOf(".git", ".idea", "build", "out")
+
+        @Volatile
+        private var forcePreviewOnOpen: Boolean = false
+
+        fun requestPreviewOnNextOpen() {
+            forcePreviewOnOpen = true
+        }
+    }
+
     private val service by lazy { project.getService(SmartEnvProjectService::class.java)!! }
     private val resolver = SmartEnvResolver()
     private var stateSnapshot = service.getState().deepCopy()
@@ -88,7 +106,8 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         EntryTypeColumn(),
         EntryPathColumn(),
         EntryFormatValueColumn(),
-        EntryKeyColumn()
+        EntryKeyColumn(),
+        EntryStatusColumn()
     )
     private val entriesTable = TableView<ProfileRow>(entriesTableModel)
 
@@ -122,6 +141,7 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
     private var dirty = false
     private var suppressFieldUpdates = false
     private var suppressTableEvents = false
+    private var latestFileStatuses: Map<String, SmartEnvFileParseResult> = emptyMap()
 
     override fun getId(): String = "dev.smartenv.settings"
 
@@ -130,6 +150,7 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
     override fun createComponent(): JComponent {
         if (mainPanel != null) {
             reloadState()
+            maybeForcePreviewOnOpen()
             return mainPanel!!
         }
 
@@ -183,7 +204,9 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
                         isSelected,
                         cellHasFocus
                     ) as JLabel
-                    component.icon = display?.hex?.parseColor()?.let { ColorSwatchIcon(it) }
+                    component.icon = display?.hex?.parseColor()?.let { color ->
+                        ColorSwatchIcon(color, ColorBadgePalette.borderColorForHex(display.hex, color))
+                    }
                     val fg = list?.let { if (isSelected) it.selectionForeground else UIUtil.getLabelForeground() }
                         ?: UIUtil.getLabelForeground()
                     component.foreground = fg
@@ -293,6 +316,7 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         }
 
         reloadState()
+        maybeForcePreviewOnOpen()
         return mainPanel!!
     }
 
@@ -399,6 +423,7 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         entriesTable.tableHeader.reorderingAllowed = false
         entriesTable.columnModel.getColumn(0).maxWidth = 60
         entriesTable.columnModel.getColumn(1).maxWidth = 90
+        entriesTable.columnModel.getColumn(5).preferredWidth = 180
         entriesTableModel.addTableModelListener {
             if (suppressTableEvents) return@addTableModelListener
             markModified()
@@ -495,15 +520,51 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
     }
 
     private fun addFolderEntries(folder: VirtualFile) {
-        try {
-            Files.walk(folder.toNioPath()).use { stream ->
-                stream.filter { Files.isRegularFile(it) }.forEach { path ->
-                    LocalFileSystem.getInstance().refreshAndFindFileByPath(path.toString())
-                        ?.let { addFileEntry(it) }
-                }
+        val candidates = collectFolderImportCandidates(folder)
+        if (candidates.isEmpty()) return
+        if (candidates.size > FOLDER_CONFIRMATION_THRESHOLD) {
+            val response = Messages.showYesNoDialog(
+                project,
+                "About to import ${candidates.size} files from '${folder.name}'. Continue?",
+                "SmartEnv",
+                "Import All",
+                "Cancel",
+                null
+            )
+            if (response != Messages.YES) {
+                return
             }
+        }
+        val localFs = LocalFileSystem.getInstance()
+        candidates.forEach { path ->
+            localFs.refreshAndFindFileByPath(path.toString())
+                ?.let { addFileEntry(it) }
+        }
+    }
+
+    private fun collectFolderImportCandidates(folder: VirtualFile): List<Path> {
+        val files = mutableListOf<Path>()
+        try {
+            Files.walkFileTree(folder.toNioPath(), object : SimpleFileVisitor<Path>() {
+                override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes?): FileVisitResult {
+                    val name = dir.fileName?.toString()?.lowercase(Locale.ENGLISH)
+                    return if (name != null && SKIPPED_FOLDER_NAMES.contains(name)) {
+                        FileVisitResult.SKIP_SUBTREE
+                    } else {
+                        FileVisitResult.CONTINUE
+                    }
+                }
+
+                override fun visitFile(file: Path, attrs: BasicFileAttributes?): FileVisitResult {
+                    if (Files.isRegularFile(file)) {
+                        files.add(file)
+                    }
+                    return FileVisitResult.CONTINUE
+                }
+            })
         } catch (_: IOException) {
         }
+        return files
     }
 
     private fun addFileEntry(file: VirtualFile) {
@@ -608,6 +669,26 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         val targetVisible = force ?: (this::previewToggle.isInitialized && previewToggle.isSelected)
         previewContainer.isVisible = targetVisible
         previewToggle.takeIf { this::previewToggle.isInitialized }?.isSelected = targetVisible
+    }
+
+    private fun maybeForcePreviewOnOpen() {
+        if (forcePreviewOnOpen) {
+            forcePreviewOnOpen = false
+            updatePreviewVisibility(true)
+        }
+    }
+
+    private fun statusForEntry(entry: SmartEnvFileEntry): String {
+        val parseResult = latestFileStatuses[entry.id] ?: return ""
+        if (!parseResult.success) {
+            return parseResult.note ?: "Unavailable"
+        }
+        val keys = parseResult.values.size
+        return if (keys > 0) {
+            "OK ($keys key${if (keys == 1) "" else "s"})"
+        } else {
+            "Parsed (0 keys)"
+        }
     }
 
     private fun selectColorChoice(hex: String) {
@@ -813,10 +894,14 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         val profile = selectedProfile ?: stateSnapshot.profiles.firstOrNull()
         if (profile == null) {
             previewPanel.setResolution(null)
+            latestFileStatuses = emptyMap()
+            entriesTable.repaint()
             return
         }
         val result = resolver.resolve(project, stateSnapshot, profile)
+        latestFileStatuses = result.fileStatuses
         previewPanel.setResolution(result)
+        entriesTable.repaint()
     }
 
     private fun exportResolvedPreview() {
@@ -913,7 +998,7 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
         }
     }
 
-    private class ColorSwatchIcon(private val color: Color) : Icon {
+    private class ColorSwatchIcon(private val fill: Color, private val border: Color) : Icon {
         override fun getIconWidth(): Int = 12
         override fun getIconHeight(): Int = 12
 
@@ -921,9 +1006,11 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
             if (g == null) return
             val g2 = g.create() as Graphics2D
             try {
-                g2.color = color
+                g2.color = fill
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
                 g2.fillOval(x, y, iconWidth, iconHeight)
+                g2.color = border
+                g2.drawOval(x, y, iconWidth - 1, iconHeight - 1)
             } finally {
                 g2.dispose()
             }
@@ -1038,6 +1125,13 @@ class SmartEnvSettingsConfigurable(private val project: Project) : SearchableCon
             if (item is ProfileRow.FileRow) {
                 item.entry.mode1Key = value.trim().ifBlank { null }
             }
+        }
+    }
+
+    private inner class EntryStatusColumn : ColumnInfo<ProfileRow, String>("Status") {
+        override fun valueOf(item: ProfileRow): String = when (item) {
+            is ProfileRow.FileRow -> statusForEntry(item.entry)
+            else -> ""
         }
     }
 

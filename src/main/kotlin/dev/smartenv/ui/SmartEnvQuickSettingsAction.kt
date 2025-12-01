@@ -100,6 +100,14 @@ class SmartEnvQuickSettingsAction : ComboBoxAction(), DumbAware {
         }
 
         group.addSeparator()
+        group.add(object : AnAction("Open SmartEnv Preview.") {
+            override fun actionPerformed(e: AnActionEvent) {
+                project?.let {
+                    SmartEnvSettingsConfigurable.requestPreviewOnNextOpen()
+                    ShowSettingsUtil.getInstance().showSettingsDialog(it, SmartEnvSettingsConfigurable::class.java)
+                }
+            }
+        })
         group.add(object : AnAction("Open SmartEnv Settings…") {
             override fun actionPerformed(e: AnActionEvent) {
                 project?.let {
@@ -113,8 +121,9 @@ class SmartEnvQuickSettingsAction : ComboBoxAction(), DumbAware {
 }
 
 private fun SmartEnvProfile.colorIconOrNull(): Icon? {
-    val color = color.parseColorOrNull() ?: return null
-    return ProfileColorIcon(color)
+    val fill = color.parseColorOrNull() ?: return null
+    val border = ColorBadgePalette.borderColorForHex(color, fill)
+    return ProfileColorIcon(fill, border)
 }
 
 private fun String?.parseColorOrNull(): Color? {
@@ -123,18 +132,22 @@ private fun String?.parseColorOrNull(): Color? {
     return runCatching { ColorUtil.fromHex(hex) }.getOrNull()
 }
 
-private class ProfileColorIcon(private val color: Color) : Icon {
+private class ProfileColorIcon(private val fill: Color, private val border: Color) : Icon {
     override fun getIconWidth(): Int = 12
     override fun getIconHeight(): Int = 12
 
     override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
         val g2 = (g as? Graphics2D)?.create() as? Graphics2D ?: return
         try {
-            g2.color = color
+            g2.color = fill
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             g2.fillOval(x, y, iconWidth, iconHeight)
+            g2.color = border
+            g2.drawOval(x, y, iconWidth - 1, iconHeight - 1)
         } finally {
             g2.dispose()
         }
     }
 }
+
+

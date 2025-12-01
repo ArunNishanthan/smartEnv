@@ -2,8 +2,8 @@ package dev.smartenv.ui
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
-import com.intellij.ui.SearchTextField
 import com.intellij.ui.JBColor
+import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
@@ -16,6 +16,7 @@ import dev.smartenv.engine.ResolvedEnvKey
 import dev.smartenv.engine.SmartEnvResolutionResult
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.Font
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JPanel
@@ -24,6 +25,7 @@ import javax.swing.ListSelectionModel
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import javax.swing.table.AbstractTableModel
+import javax.swing.table.DefaultTableCellRenderer
 
 class SmartEnvPreviewPanel(private val project: Project) {
     private val searchField = SearchTextField()
@@ -178,7 +180,25 @@ class SmartEnvPreviewPanel(private val project: Project) {
         columnModel.getColumn(0).preferredWidth = 220
         columnModel.getColumn(1).preferredWidth = 280
         columnModel.getColumn(2).preferredWidth = 220
-        columnModel.getColumn(3).preferredWidth = 140
+        columnModel.getColumn(3).preferredWidth = 160
+        columnModel.getColumn(3).cellRenderer = object : DefaultTableCellRenderer() {
+            override fun getTableCellRendererComponent(
+                table: JTable?,
+                value: Any?,
+                isSelected: Boolean,
+                hasFocus: Boolean,
+                row: Int,
+                column: Int
+            ): java.awt.Component {
+                val component = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
+                if (table != null) {
+                    val modelIndex = table.convertRowIndexToModel(row)
+                    val hasOverrides = tableModel.rows.getOrNull(modelIndex)?.hasOverrides == true
+                    component.font = component.font.deriveFont(if (hasOverrides) Font.BOLD else Font.PLAIN)
+                }
+                return component
+            }
+        }
     }
 
     private fun showOverrideDialog(key: ResolvedEnvKey) {
@@ -196,7 +216,7 @@ class SmartEnvPreviewPanel(private val project: Project) {
 
     private fun formatLayerLabel(source: LayerSource): String {
         val profileName = source.profileName.ifBlank { source.profileId }
-        return "${profileName.ifBlank { source.profileId }} • ${source.layerName}"
+        return "${profileName.ifBlank { source.profileId }} -> ${source.layerName}"
     }
 
     private inner class PreviewTableModel : AbstractTableModel() {
@@ -216,7 +236,11 @@ class SmartEnvPreviewPanel(private val project: Project) {
                 0 -> item.key
                 1 -> item.finalValue
                 2 -> formatLayerLabel(item.winningLayer)
-                else -> if (item.hasOverrides) "${item.stack.size} layer(s)" else "Single source"
+                else -> if (item.hasOverrides) {
+                    "Overrides (${item.stack.size} layer(s))"
+                } else {
+                    "Single source"
+                }
             }
         }
 
@@ -226,3 +250,4 @@ class SmartEnvPreviewPanel(private val project: Project) {
         }
     }
 }
+

@@ -30,7 +30,8 @@ class SmartEnvResolver(private val fileProcessor: SmartEnvFileProcessor = SmartE
 
         val basePath = project.basePath?.let { Paths.get(it) }
         val chainProfiles = resolveProfileChain(profile, state)
-        val layers = buildLayers(chainProfiles, basePath)
+        val fileStatuses = LinkedHashMap<String, SmartEnvFileParseResult>()
+        val layers = buildLayers(chainProfiles, basePath, fileStatuses)
         val resolvedKeys = flattenLayers(layers)
 
         val variables = LinkedHashMap<String, String>()
@@ -41,7 +42,8 @@ class SmartEnvResolver(private val fileProcessor: SmartEnvFileProcessor = SmartE
             variables = variables,
             resolvedKeys = resolvedKeys,
             chain = chainNames,
-            layers = layers
+            layers = layers,
+            fileStatuses = fileStatuses
         )
     }
 
@@ -66,12 +68,13 @@ class SmartEnvResolver(private val fileProcessor: SmartEnvFileProcessor = SmartE
 
     private fun buildLayers(
         chainProfiles: List<SmartEnvProfile>,
-        basePath: Path?
+        basePath: Path?,
+        fileStatuses: MutableMap<String, SmartEnvFileParseResult>
     ): List<EnvLayer> {
         val layers = mutableListOf<EnvLayer>()
         var order = 0
         for (profile in chainProfiles) {
-            val fileLayers = buildFileLayers(profile, basePath, order)
+            val fileLayers = buildFileLayers(profile, basePath, order, fileStatuses)
             layers.addAll(fileLayers)
             order += fileLayers.size
 
@@ -87,16 +90,17 @@ class SmartEnvResolver(private val fileProcessor: SmartEnvFileProcessor = SmartE
     private fun buildFileLayers(
         profile: SmartEnvProfile,
         basePath: Path?,
-        startOrder: Int
+        startOrder: Int,
+        fileStatuses: MutableMap<String, SmartEnvFileParseResult>
     ): List<EnvLayer> {
         val result = mutableListOf<EnvLayer>()
         var order = startOrder
         profile.files.withIndex()
-            .filter { it.value.enabled }
             .sortedWith(compareBy({ it.value.order }, { it.index }))
             .forEach { (index, entry) ->
                 val parseResult = fileProcessor.parse(entry, basePath)
-                if (!parseResult.success || parseResult.values.isEmpty()) {
+                fileStatuses[entry.id] = parseResult
+                if (!entry.enabled || !parseResult.success || parseResult.values.isEmpty()) {
                     return@forEach
                 }
 
@@ -170,5 +174,6 @@ data class SmartEnvResolutionResult(
     val variables: LinkedHashMap<String, String>,
     val resolvedKeys: List<ResolvedEnvKey>,
     val chain: List<String>,
-    val layers: List<EnvLayer>
+    val layers: List<EnvLayer>,
+    val fileStatuses: Map<String, SmartEnvFileParseResult> = emptyMap()
 )
