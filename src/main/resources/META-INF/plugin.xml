@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>dev.smartenv.smartenv</id>
     <name>SmartEnv</name>
-    <version>1.1.1</version>
+    <version>1.1.2</version>
     <vendor url="https://example.com/smartenv">SmartEnv Team</vendor>
     <description><![CDATA[
         <p>SmartEnv injects profile-driven environment variables right before launching run configurations.</p>
@@ -22,6 +22,12 @@
     ]]></description>
     <change-notes>
         <![CDATA[
+        <h3>1.1.2 - Preview & diagnostics polish</h3>
+        <ul>
+          <li>Harden dotenv/properties parsing (export lines, inline comments, quoted values) and surface clearer missing-file diagnostics.</li>
+          <li>Add Status feedback inside SmartEnv settings, including missing/failed files and zero-key parses, plus safer folder imports with a 100-file confirmation.</li>
+          <li>Emphasize override-heavy keys in the Preview table and add a Quick Settings shortcut that opens the Settings + Preview pane directly.</li>
+        </ul>
         <h3>1.1.1 - Compatibility refresh</h3>
         <ul>
           <li>Extend IntelliJ build compatibility through 252.28238.7 while keeping the existing feature set intact.</li>

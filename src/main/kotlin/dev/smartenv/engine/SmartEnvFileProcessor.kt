@@ -28,10 +28,12 @@ class SmartEnvFileProcessor {
     private val objectMapper = jacksonObjectMapper()
 
     fun parse(entry: SmartEnvFileEntry, basePath: Path?): SmartEnvFileParseResult {
-        val resolvedPath = resolvePath(basePath, entry.path)
+        val pathInfo = resolvePath(basePath, entry.path)
+        val resolvedPath = pathInfo?.path
         if (resolvedPath == null || !Files.exists(resolvedPath)) {
             LOG.debug("SmartEnv file not found: ${entry.path}")
-            return SmartEnvFileParseResult(LinkedHashMap(), false, null, null, "Missing file")
+            val note = buildMissingFileNote(entry.path, pathInfo)
+            return SmartEnvFileParseResult(LinkedHashMap(), false, null, null, note)
         }
         val typeCandidates = determineTypeSequence(entry, resolvedPath)
         for (type in typeCandidates) {
@@ -50,13 +52,20 @@ class SmartEnvFileProcessor {
         return SmartEnvFileParseResult(LinkedHashMap(), false, null, null, "Unparsable")
     }
 
-    private fun resolvePath(basePath: Path?, entryPath: String): Path? {
-        val candidate = Paths.get(entryPath)
-        return when {
-            candidate.isAbsolute -> candidate
-            basePath != null -> basePath.resolve(candidate).normalize()
-            else -> null
+    private fun resolvePath(basePath: Path?, entryPath: String): ResolvedPath? {
+        val candidate = try {
+            Paths.get(entryPath)
+        } catch (exc: Exception) {
+            LOG.debug("SmartEnv invalid path '$entryPath': ${exc.message}")
+            return null
         }
+        val wasRelative = !candidate.isAbsolute
+        val resolved = when {
+            !wasRelative -> candidate.normalize()
+            basePath != null -> basePath.resolve(candidate).normalize()
+            else -> candidate.toAbsolutePath().normalize()
+        }
+        return ResolvedPath(resolved, basePath == null, wasRelative)
     }
 
     private fun determineTypeSequence(entry: SmartEnvFileEntry, path: Path): List<SmartEnvFileType> {
@@ -90,7 +99,7 @@ class SmartEnvFileProcessor {
                     map[key] = value
                 }
             }
-            ParseAttempt(map, map.isNotEmpty(), map.entries.joinToString("\n") { "${it.key} = ${it.value}" }, "Properties")
+            ParseAttempt(map, true, map.entries.joinToString("\n") { "${it.key} = ${it.value}" }, "Properties")
         } catch (exc: Exception) {
             LOG.debug("SmartEnv failed to parse properties/dotenv file $path: ${exc.message}")
             ParseAttempt(LinkedHashMap(), false, null, "Failed to parse properties")
@@ -103,7 +112,7 @@ class SmartEnvFileProcessor {
             val loaded = yaml.load<Any>(content)
             val map = LinkedHashMap<String, String>()
             flattenYaml(loaded, null, map)
-            ParseAttempt(map, map.isNotEmpty(), yaml.dump(loaded).trim(), "YAML")
+            ParseAttempt(map, true, yaml.dump(loaded).trim(), "YAML")
         } catch (exc: Exception) {
             LOG.debug("SmartEnv failed to parse YAML file $path: ${exc.message}")
             ParseAttempt(LinkedHashMap(), false, null, "Failed to parse YAML")
@@ -204,18 +213,59 @@ class SmartEnvFileProcessor {
     }
 
     private fun parseKeyValueLine(line: String): Pair<String, String>? {
-        val trimmed = line.trim()
+        var trimmed = line.trim()
         if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith(";")) {
             return null
         }
+        if (trimmed.startsWith("export ")) {
+            trimmed = trimmed.removePrefix("export").trimStart()
+        }
         val idx = trimmed.indexOf('=').takeIf { it >= 0 } ?: trimmed.indexOf(':').takeIf { it >= 0 } ?: return null
         val key = trimmed.substring(0, idx).trim()
-        val value = trimmed.substring(idx + 1).trim()
+        val rawValuePortion = trimmed.substring(idx + 1)
+        val value = stripInlineComment(rawValuePortion).trim().unquote()
         if (key.isEmpty()) {
             return null
         }
         return key to value
     }
+
+    private fun stripInlineComment(segment: String): String {
+        var quoteChar: Char? = null
+        for (i in segment.indices) {
+            val ch = segment[i]
+            if (ch == '"' || ch == '\'') {
+                quoteChar = when {
+                    quoteChar == null -> ch
+                    quoteChar == ch -> null
+                    else -> quoteChar
+                }
+                continue
+            }
+            if (quoteChar == null && (ch == '#' || ch == ';')) {
+                return segment.substring(0, i)
+            }
+        }
+        return segment
+    }
+
+    private fun String.unquote(): String {
+        if (length >= 2 && (startsWith("\"") && endsWith("\"") || startsWith("'") && endsWith("'"))) {
+            return substring(1, length - 1)
+        }
+        return this
+    }
+
+    private fun buildMissingFileNote(originalPath: String, resolved: ResolvedPath?): String {
+        val display = resolved?.path?.toString()?.ifBlank { originalPath } ?: originalPath
+        return if (resolved?.baseMissing == true && resolved.wasRelative) {
+            "Missing file: $display (project base path unavailable; relative path may be wrong)"
+        } else {
+            "Missing file: $display"
+        }
+    }
+
+    private data class ResolvedPath(val path: Path, val baseMissing: Boolean, val wasRelative: Boolean)
 
     private data class ParseAttempt(
         val values: LinkedHashMap<String, String>,
