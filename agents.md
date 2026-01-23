@@ -59,3 +59,8 @@ This doc is for future automation agents working on the SmartEnv plugin. Keep ed
 
 - Version bumped to `1.1.4` in `build.gradle.kts` and `plugin.xml`.
 - IntelliJ compatibility extended through build `253.29346.240` (patchPluginXml `untilBuild` + change notes refreshed).
+
+## Release 1.1.5 Notes
+
+- Version bumped to `1.1.5` in `build.gradle.kts` and `plugin.xml`.
+- IntelliJ compatibility extended through build `253.30387.90` (patchPluginXml `untilBuild` + change notes refreshed).
