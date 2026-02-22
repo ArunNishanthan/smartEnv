@@ -5,7 +5,7 @@ plugins {
 
 
 group = "dev.smartenv"
-version = "1.1.5"
+version = "1.1.6"
 
 repositories {
     mavenCentral()
@@ -29,8 +29,12 @@ kotlin {
 }
 
 tasks {
-    patchPluginXml {
+        patchPluginXml {
         changeNotes.set("""
+            <h3>1.1.6 - 253 build compatibility</h3>
+            <ul>
+                <li>Extend IntelliJ build compatibility through 253.31033.145 so SmartEnv stays usable on the latest 2025.3 builds.</li>
+            </ul>
             <h3>1.1.5 - 253 build compatibility</h3>
             <ul>
                 <li>Extend IntelliJ build compatibility through 253.30387.90 so SmartEnv stays usable on the latest 2025.3 builds.</li>
@@ -55,7 +59,7 @@ tasks {
             </ul>
         """.trimIndent())
         sinceBuild.set("251.23774.435")
-        untilBuild.set("253.30387.90")
+        untilBuild.set("253.31033.145")
     }
 
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
