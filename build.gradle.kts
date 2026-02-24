@@ -5,7 +5,7 @@ plugins {
 
 
 group = "dev.smartenv"
-version = "1.1.6"
+version = "1.1.7"
 
 repositories {
     mavenCentral()
@@ -20,6 +20,7 @@ intellij {
     version.set("2025.1")
     type.set("IC")
     plugins.set(listOf("java"))
+    updateSinceUntilBuild.set(false)
 }
 
 kotlin {
@@ -31,6 +32,10 @@ kotlin {
 tasks {
         patchPluginXml {
         changeNotes.set("""
+            <h3>1.1.7 - Open-ended compatibility window</h3>
+            <ul>
+                <li>Remove the explicit <code>untilBuild</code> cap so SmartEnv does not require release bumps for each new IntelliJ patch build.</li>
+            </ul>
             <h3>1.1.6 - 253 build compatibility</h3>
             <ul>
                 <li>Extend IntelliJ build compatibility through 253.31033.145 so SmartEnv stays usable on the latest 2025.3 builds.</li>
@@ -59,7 +64,6 @@ tasks {
             </ul>
         """.trimIndent())
         sinceBuild.set("251.23774.435")
-        untilBuild.set("253.31033.145")
     }
 
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
