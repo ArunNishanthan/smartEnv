@@ -22,6 +22,12 @@ SmartEnv lets you compose runtime environment variables from multiple files and 
 - Extend IntelliJ build compatibility through 253.31033.145 so SmartEnv keeps running on the latest 2025.3 platform builds.
 - Refresh Marketplace metadata/change notes in preparation for the 1.1.6 publication.
 
+## What's New in 1.1.8
+
+- Migrate build tooling to IntelliJ Platform Gradle Plugin 2.x for current IntelliJ platform compatibility.
+- Move Java/Kotlin build baseline to 21 to match IntelliJ 2025.1+ runtime expectations.
+- Add plugin verification coverage for IntelliJ 2025.1, 2025.3, and 2026.1.
+
 ## What's New in 1.1.5
 
 - Extend IntelliJ build compatibility through 253.30387.90 so SmartEnv keeps running on the latest 2025.3 platform builds.
@@ -90,5 +96,5 @@ project/
 ## Technical Information
 
 - SmartEnv registers its actions, run-configuration extension, tool window, and configurable via the extensions declared in `src/main/resources/META-INF/plugin.xml`. JetBrains may recommend the plugin within related IDE contexts thanks to these extension points (see the <a href="https://plugins.jetbrains.com/docs/intellij/plugin-recommendations.html">Plugin recommendations</a> guide).
-- Built against Kotlin 17 and the IntelliJ Platform 2025.1 IC with the Java plugin; compatibility has been validated through build 253.31033.145 so the plugin keeps working on 2025.3 IDEs. Adjust `build.gradle.kts` to target other baselines if needed.
+- Built against Kotlin/JVM 21 and the IntelliJ Platform 2025.1 IC with the Java plugin. The build now uses IntelliJ Platform Gradle Plugin 2.x and includes Plugin Verifier targets for 2025.1, 2025.3, and 2026.1.
 - Use `./gradlew buildPlugin` to produce the ZIP and `./gradlew runIde` to launch a sandbox. The generated ZIP lives in `build/distributions/`.
