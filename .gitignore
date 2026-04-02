@@ -30,6 +30,7 @@ plugins-sandbox/
 
 ### Gradle ###
 .gradle/
+.intellijPlatform/
 build/
 **/build/
 
@@ -67,3 +68,9 @@ Thumbs.db
 *.zip          # built plugin distributions
 *.jar          # compiled jars (unless you intentionally commit them)
 *.hprof        # heap dumps
+
+### Local-only Files ###
+verification-*/
+gradlew
+gradlew.bat
+gradle/wrapper/gradle-wrapper.jar

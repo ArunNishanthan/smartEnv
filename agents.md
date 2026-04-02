@@ -74,3 +74,10 @@ This doc is for future automation agents working on the SmartEnv plugin. Keep ed
 
 - Version bumped to `1.1.7` in `build.gradle.kts` and `plugin.xml`.
 - Removed `patchPluginXml untilBuild` to avoid compatibility-only releases for each new IntelliJ patch build.
+
+## Release 1.1.8 Notes
+
+- Version bumped to `1.1.8` in `build.gradle.kts` and `plugin.xml`.
+- Build tooling migrated from Gradle IntelliJ Plugin `1.x` to IntelliJ Platform Gradle Plugin `2.x`.
+- Java/Kotlin target moved from `17` to `21` for IntelliJ `2025.1+` runtime alignment.
+- Plugin verifier targets now include IntelliJ IDEA Community `2025.1`, `2025.3`, and `2026.1`.
